@@ -18,4 +18,4 @@ change the EPOCHS variable to be above 10M for better results. the higher it is,
 
 # Bias
 
-Currently the output his biased as the plain text response only includes letters present in the clues, suggesting a biased approach towards the bruteforced attempt.
+Currently the results are biased. The plain text response only includes letters present in the clues, suggesting a biased approach towards the bruteforced attempt. Further work would be required to **potentially** bruteforce the 30+ year old code. 
