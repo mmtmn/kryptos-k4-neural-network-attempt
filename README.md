@@ -15,3 +15,7 @@ gcc -o RNN RNN.c -lm;./RNN
 # Breaking Kryptos K4
 
 change the EPOCHS variable to be above 10M for better results. the higher it is, the better the results.
+
+# Bias
+
+Currently the output his biased as the plain text response only includes letters present in the clues, suggesting a biased approach towards the bruteforced attempt.
