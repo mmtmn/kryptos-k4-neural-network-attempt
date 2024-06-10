@@ -1,6 +1,6 @@
-# Kryptos
+# Kryptos K4
 
-Since its dedication on November 3, 1990, there has been much speculation about the meaning of the four encrypted messages it bears. Of these four messages, the first three have been solved, while the fourth message remains one of the most famous unsolved codes in the world. The sculpture continues to be of interest to cryptanalysts, both amateur and professional, who are attempting to decipher the fourth passage. The artist has so far given four clues to this passage. 
+The fourth message remains one of the most famous unsolved codes in the world. 
 
 **This respository is dedicated to bruteforcing the fourth passage.**
 
