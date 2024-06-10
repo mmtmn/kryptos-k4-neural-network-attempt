@@ -24,10 +24,10 @@ gcc -o unbiased_NN unbiased_NN.c -lm;./unbiased_NN
 
 # Update (June 10th,2024)
 
-two new folders have been added and a new unbiased neural network. 
-The new NN only consideres the positive and negative number shifts instead of letters.
-This attempts to avoid the previous attempts bias.
-You can find the old attempts in one of the folders, where the clues are placed correctly but the bias is still there.
+- two new folders have been added and a new unbiased neural network. 
+- The new NN only consideres the positive and negative number shifts instead of letters.
+- This attempts to avoid the previous attempts bias.
+- You can find the old attempts in one of the folders, where the clues are placed correctly but the bias is still there.
 
 The new neural network (unbiased_NN.c) is still training and it is not known if it'll get the clues's plain text in the right place as of right now.
 
