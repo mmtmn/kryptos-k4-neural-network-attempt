@@ -7,7 +7,7 @@
 #define INPUT_NODES 1
 #define OUTPUT_NODES 1
 #define LEARNING_RATE 0.01
-#define EPOCHS 100
+#define EPOCHS 10000
 
 typedef struct {
     int num_layers;
@@ -135,7 +135,7 @@ void free_rnn() {
 int main() {
     srand(time(NULL));
 
-    int layer_sizes[] = { INPUT_NODES, 100, 100, 100, OUTPUT_NODES }; // Modify this to change architecture
+    int layer_sizes[] = { INPUT_NODES, 100, 100, OUTPUT_NODES }; // Modify this to change architecture
     int num_layers = sizeof(layer_sizes) / sizeof(layer_sizes[0]);
 
     initialize_rnn(num_layers, layer_sizes);
@@ -181,7 +181,9 @@ int main() {
     int ciphertext_len = strlen(ciphertext);
     char decrypted_text[ciphertext_len + 1];
 
-    // Initialize hidden state to zero for decryption
+    printf("\nDetailed Decryption Report:\n");
+    printf("Index\tOriginal\tPredicted Shift\tRounded Shift\tDecrypted\n");
+
     for (int i = 0; i < rnn.layer_sizes[1]; i++) {
         rnn.outputs[1][i] = 0.0;
     }
@@ -191,10 +193,14 @@ int main() {
         forward_pass(input);
         int output_layer = rnn.num_layers - 1;
         double shift = rnn.outputs[output_layer][0] * 52.0 - 26;
-        decrypted_text[i] = 'A' + (ciphertext[i] - 'A' + (int)shift + 26) % 26;
+        int rounded_shift = (int)round(shift);
+        char decrypted_char = 'A' + (ciphertext[i] - 'A' + rounded_shift + 26) % 26;
+        decrypted_text[i] = decrypted_char;
+        printf("%d\t%c\t\t%f\t%d\t\t%c\n", i, ciphertext[i], shift, rounded_shift, decrypted_char);
     }
     decrypted_text[ciphertext_len] = '\0';
-    printf("Decrypted Text: %s\n", decrypted_text);
+
+    printf("\nDecrypted Text: %s\n", decrypted_text);
 
     free_rnn();
     return 0;
