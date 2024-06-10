@@ -4,19 +4,17 @@
 #include <time.h>
 #include <string.h>
 
-#define INPUT_NODES 1 // Only 1 input representing the current character
-#define HIDDEN_NODES 10
-#define OUTPUT_NODES 1 // Only one output representing the shift
+#define INPUT_NODES 1
+#define OUTPUT_NODES 1
 #define LEARNING_RATE 0.01
-#define EPOCHS 1000000
+#define EPOCHS 100
 
 typedef struct {
-    double *weights_input_hidden;
-    double *weights_hidden_hidden;
-    double *weights_hidden_output;
-    double *hidden_bias;
-    double *output_bias;
-    double *hidden_state;
+    int num_layers;
+    int *layer_sizes;
+    double **weights;
+    double **biases;
+    double **outputs;
 } RNN;
 
 RNN rnn;
@@ -29,129 +27,118 @@ double sigmoid_derivative(double x) {
     return x * (1.0 - x);
 }
 
-void initialize_rnn() {
-    srand(time(NULL));
+void initialize_rnn(int num_layers, int *layer_sizes) {
+    rnn.num_layers = num_layers;
+    rnn.layer_sizes = (int *)malloc(num_layers * sizeof(int));
 
-    rnn.weights_input_hidden = (double *)malloc(INPUT_NODES * HIDDEN_NODES * sizeof(double));
-    rnn.weights_hidden_hidden = (double *)malloc(HIDDEN_NODES * HIDDEN_NODES * sizeof(double));
-    rnn.weights_hidden_output = (double *)malloc(HIDDEN_NODES * OUTPUT_NODES * sizeof(double));
-    rnn.hidden_bias = (double *)malloc(HIDDEN_NODES * sizeof(double));
-    rnn.output_bias = (double *)malloc(OUTPUT_NODES * sizeof(double));
-    rnn.hidden_state = (double *)malloc(HIDDEN_NODES * sizeof(double));
+    for (int i = 0; i < num_layers; i++) {
+        rnn.layer_sizes[i] = layer_sizes[i];
+    }
 
-    for (int i = 0; i < INPUT_NODES * HIDDEN_NODES; i++) {
-        rnn.weights_input_hidden[i] = ((double)rand() / RAND_MAX) - 0.5;
+    rnn.weights = (double **)malloc((num_layers - 1) * sizeof(double *));
+    rnn.biases = (double **)malloc((num_layers - 1) * sizeof(double *));
+    rnn.outputs = (double **)malloc(num_layers * sizeof(double *));
+
+    for (int i = 0; i < num_layers; i++) {
+        rnn.outputs[i] = (double *)malloc(layer_sizes[i] * sizeof(double));
     }
-    for (int i = 0; i < HIDDEN_NODES * HIDDEN_NODES; i++) {
-        rnn.weights_hidden_hidden[i] = ((double)rand() / RAND_MAX) - 0.5;
-    }
-    for (int i = 0; i < HIDDEN_NODES * OUTPUT_NODES; i++) {
-        rnn.weights_hidden_output[i] = ((double)rand() / RAND_MAX) - 0.5;
-    }
-    for (int i = 0; i < HIDDEN_NODES; i++) {
-        rnn.hidden_bias[i] = ((double)rand() / RAND_MAX) - 0.5;
-        rnn.hidden_state[i] = 0.0; // Initialize hidden state to zero
-    }
-    for (int i = 0; i < OUTPUT_NODES; i++) {
-        rnn.output_bias[i] = ((double)rand() / RAND_MAX) - 0.5;
+
+    for (int i = 0; i < num_layers - 1; i++) {
+        int rows = layer_sizes[i];
+        int cols = layer_sizes[i + 1];
+        rnn.weights[i] = (double *)malloc(rows * cols * sizeof(double));
+        rnn.biases[i] = (double *)malloc(cols * sizeof(double));
+        for (int j = 0; j < rows * cols; j++) {
+            rnn.weights[i][j] = ((double)rand() / RAND_MAX) - 0.5;
+        }
+        for (int j = 0; j < cols; j++) {
+            rnn.biases[i][j] = ((double)rand() / RAND_MAX) - 0.5;
+        }
     }
 }
 
-void forward_pass_rnn(double input, double *hidden_state, double *output) {
-    double new_hidden_state[HIDDEN_NODES];
+void forward_pass(double input) {
+    rnn.outputs[0][0] = input;
 
-    for (int i = 0; i < HIDDEN_NODES; i++) {
-        new_hidden_state[i] = rnn.hidden_bias[i];
-        new_hidden_state[i] += input * rnn.weights_input_hidden[i];
-        for (int j = 0; j < HIDDEN_NODES; j++) {
-            new_hidden_state[i] += hidden_state[j] * rnn.weights_hidden_hidden[i * HIDDEN_NODES + j];
+    for (int l = 0; l < rnn.num_layers - 1; l++) {
+        int rows = rnn.layer_sizes[l];
+        int cols = rnn.layer_sizes[l + 1];
+
+        for (int j = 0; j < cols; j++) {
+            rnn.outputs[l + 1][j] = rnn.biases[l][j];
+            for (int i = 0; i < rows; i++) {
+                rnn.outputs[l + 1][j] += rnn.outputs[l][i] * rnn.weights[l][i * cols + j];
+            }
+            rnn.outputs[l + 1][j] = sigmoid(rnn.outputs[l + 1][j]);
         }
-        new_hidden_state[i] = sigmoid(new_hidden_state[i]);
-    }
-
-    for (int i = 0; i < OUTPUT_NODES; i++) {
-        output[i] = rnn.output_bias[i];
-        for (int j = 0; j < HIDDEN_NODES; j++) {
-            output[i] += new_hidden_state[j] * rnn.weights_hidden_output[j * OUTPUT_NODES + i];
-        }
-        output[i] = sigmoid(output[i]);
-    }
-
-    // Update hidden state
-    for (int i = 0; i < HIDDEN_NODES; i++) {
-        hidden_state[i] = new_hidden_state[i];
     }
 }
 
-void train_rnn(double *inputs, double *targets, int sequence_length) {
-    double hidden_states[sequence_length][HIDDEN_NODES];
-    double outputs[sequence_length][OUTPUT_NODES];
-    double output_errors[sequence_length][OUTPUT_NODES];
-    double hidden_errors[sequence_length][HIDDEN_NODES];
+void train(double *inputs, double *targets, int sequence_length) {
+    double **deltas = (double **)malloc(rnn.num_layers * sizeof(double *));
+    for (int i = 0; i < rnn.num_layers; i++) {
+        deltas[i] = (double *)malloc(rnn.layer_sizes[i] * sizeof(double));
+    }
 
-    // Forward pass through time
     for (int t = 0; t < sequence_length; t++) {
-        forward_pass_rnn(inputs[t], rnn.hidden_state, outputs[t]);
-        for (int i = 0; i < HIDDEN_NODES; i++) {
-            hidden_states[t][i] = rnn.hidden_state[i];
+        forward_pass(inputs[t]);
+
+        int output_layer = rnn.num_layers - 1;
+        for (int i = 0; i < rnn.layer_sizes[output_layer]; i++) {
+            deltas[output_layer][i] = (targets[t] - rnn.outputs[output_layer][i]) * sigmoid_derivative(rnn.outputs[output_layer][i]);
+        }
+
+        for (int l = rnn.num_layers - 2; l >= 0; l--) {
+            int rows = rnn.layer_sizes[l];
+            int cols = rnn.layer_sizes[l + 1];
+
+            for (int i = 0; i < rows; i++) {
+                deltas[l][i] = 0.0;
+                for (int j = 0; j < cols; j++) {
+                    deltas[l][i] += deltas[l + 1][j] * rnn.weights[l][i * cols + j];
+                }
+                deltas[l][i] *= sigmoid_derivative(rnn.outputs[l][i]);
+            }
+
+            for (int i = 0; i < rows; i++) {
+                for (int j = 0; j < cols; j++) {
+                    rnn.weights[l][i * cols + j] += LEARNING_RATE * deltas[l + 1][j] * rnn.outputs[l][i];
+                }
+            }
+            for (int j = 0; j < cols; j++) {
+                rnn.biases[l][j] += LEARNING_RATE * deltas[l + 1][j];
+            }
         }
     }
 
-    // Calculate output errors
-    for (int t = 0; t < sequence_length; t++) {
-        for (int i = 0; i < OUTPUT_NODES; i++) {
-            output_errors[t][i] = (targets[t] - outputs[t][i]) * sigmoid_derivative(outputs[t][i]);
-        }
+    for (int i = 0; i < rnn.num_layers; i++) {
+        free(deltas[i]);
     }
-
-    // Backpropagate errors through time
-    for (int t = sequence_length - 1; t >= 0; t--) {
-        for (int i = 0; i < HIDDEN_NODES; i++) {
-            hidden_errors[t][i] = 0.0;
-            for (int j = 0; j < OUTPUT_NODES; j++) {
-                hidden_errors[t][i] += output_errors[t][j] * rnn.weights_hidden_output[i * OUTPUT_NODES + j];
-            }
-            hidden_errors[t][i] *= sigmoid_derivative(hidden_states[t][i]);
-        }
-    }
-
-    // Update weights and biases
-    for (int t = 0; t < sequence_length; t++) {
-        for (int i = 0; i < HIDDEN_NODES; i++) {
-            for (int j = 0; j < OUTPUT_NODES; j++) {
-                rnn.weights_hidden_output[i * OUTPUT_NODES + j] += LEARNING_RATE * output_errors[t][j] * hidden_states[t][i];
-            }
-        }
-        for (int i = 0; i < OUTPUT_NODES; i++) {
-            rnn.output_bias[i] += LEARNING_RATE * output_errors[t][i];
-        }
-        for (int i = 0; i < INPUT_NODES; i++) {
-            for (int j = 0; j < HIDDEN_NODES; j++) {
-                rnn.weights_input_hidden[i * HIDDEN_NODES + j] += LEARNING_RATE * hidden_errors[t][j] * inputs[t];
-            }
-        }
-        for (int i = 0; i < HIDDEN_NODES; i++) {
-            for (int j = 0; j < HIDDEN_NODES; j++) {
-                rnn.weights_hidden_hidden[i * HIDDEN_NODES + j] += LEARNING_RATE * hidden_errors[t][i] * hidden_states[t - 1][j];
-            }
-        }
-        for (int i = 0; i < HIDDEN_NODES; i++) {
-            rnn.hidden_bias[i] += LEARNING_RATE * hidden_errors[t][i];
-        }
-    }
+    free(deltas);
 }
 
 void free_rnn() {
-    free(rnn.weights_input_hidden);
-    free(rnn.weights_hidden_hidden);
-    free(rnn.weights_hidden_output);
-    free(rnn.hidden_bias);
-    free(rnn.output_bias);
-    free(rnn.hidden_state);
+    for (int i = 0; i < rnn.num_layers; i++) {
+        free(rnn.outputs[i]);
+    }
+    free(rnn.outputs);
+
+    for (int i = 0; i < rnn.num_layers - 1; i++) {
+        free(rnn.weights[i]);
+        free(rnn.biases[i]);
+    }
+    free(rnn.weights);
+    free(rnn.biases);
+    free(rnn.layer_sizes);
 }
 
 int main() {
-    initialize_rnn();
+    srand(time(NULL));
+
+    int layer_sizes[] = { INPUT_NODES, 100, 100, 100, OUTPUT_NODES }; // Modify this to change architecture
+    int num_layers = sizeof(layer_sizes) / sizeof(layer_sizes[0]);
+
+    initialize_rnn(num_layers, layer_sizes);
 
     // Training data
     double displacements[] = {
@@ -169,22 +156,24 @@ int main() {
     for (int epoch = 0; epoch < EPOCHS; epoch++) {
         double total_error = 0.0;
 
-        // Train RNN with each sequence
-        train_rnn(normalized_displacements, normalized_displacements, num_displacements);
+        for (int i = 0; i < num_displacements; i++) {
+            forward_pass(normalized_displacements[i]);
+            int output_layer = rnn.num_layers - 1;
+            total_error += fabs(normalized_displacements[i] - rnn.outputs[output_layer][0]);
+        }
 
         if (epoch % 100 == 0) {
-            printf("Epoch %d, Training...\n", epoch);
+            printf("Epoch %d, Total Error: %f\n", epoch, total_error);
         }
+
+        train(normalized_displacements, normalized_displacements, num_displacements);
     }
 
     // Validate the model on training data to check learning
-    double predicted_displacements[num_displacements];
-    for (int t = 0; t < num_displacements; t++) {
-        forward_pass_rnn(normalized_displacements[t], rnn.hidden_state, predicted_displacements + t);
-    }
-
     for (int i = 0; i < num_displacements; i++) {
-        printf("True displacement: %f, Predicted displacement: %f\n", displacements[i], predicted_displacements[i] * 52.0 - 26);
+        forward_pass(normalized_displacements[i]);
+        int output_layer = rnn.num_layers - 1;
+        printf("True displacement: %f, Predicted displacement: %f\n", displacements[i], rnn.outputs[output_layer][0] * 52.0 - 26);
     }
 
     // Decrypt the full ciphertext
@@ -192,16 +181,16 @@ int main() {
     int ciphertext_len = strlen(ciphertext);
     char decrypted_text[ciphertext_len + 1];
 
-    // Reset hidden state for decryption
-    for (int i = 0; i < HIDDEN_NODES; i++) {
-        rnn.hidden_state[i] = 0.0;
+    // Initialize hidden state to zero for decryption
+    for (int i = 0; i < rnn.layer_sizes[1]; i++) {
+        rnn.outputs[1][i] = 0.0;
     }
 
     for (int i = 0; i < ciphertext_len; i++) {
         double input = (ciphertext[i] - 'A') / 25.0;
-        double output[OUTPUT_NODES];
-        forward_pass_rnn(input, rnn.hidden_state, output);
-        double shift = output[0] * 52.0 - 26;
+        forward_pass(input);
+        int output_layer = rnn.num_layers - 1;
+        double shift = rnn.outputs[output_layer][0] * 52.0 - 26;
         decrypted_text[i] = 'A' + (ciphertext[i] - 'A' + (int)shift + 26) % 26;
     }
     decrypted_text[ciphertext_len] = '\0';
