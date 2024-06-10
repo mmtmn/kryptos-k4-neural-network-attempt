@@ -5,10 +5,10 @@
 #include <string.h>
 
 #define INPUT_NODES 2 // Only 2 for displacements
-#define HIDDEN_NODES 100
+#define HIDDEN_NODES 10
 #define OUTPUT_NODES 1 // Only one output representing the shift
 #define LEARNING_RATE 0.01
-#define EPOCHS 100000
+#define EPOCHS 1000000
 
 typedef struct {
     double **weights;
