@@ -40,7 +40,7 @@ The new neural network (unbiased_NN.c) is still training and it is not known if 
 
 # older versions of the Neural Networks
 
-On the older versions of the results are biased. You can find them in the folder biased_NN_&_RNN. The plain text response only includes letters present in the clues, suggesting a biased approach towards the bruteforced attempt. Further work would be required to **potentially** bruteforce the 30+ year old cipher.
+On the older versions of the results are biased. You can find them in the folder biased_NN_&_RNN. The plain text response only includes letters present in the clues, suggesting a biased approach towards the bruteforced attempt. Further work would be required to **potentially** bruteforce the 30+ year old cipher (further work has been done and now this code sits in the biased folder). Even with such bias, the results are interesting, you find the plain text clues in the right place after 10k epochs, which gives the false hope of solving it. 
 
 # to run the older models:
 
