@@ -4,10 +4,10 @@
 #include <time.h>
 #include <string.h>
 
-#define INPUT_NODES 1
+#define INPUT_NODES 2 // Position and displacement
 #define OUTPUT_NODES 1
 #define LEARNING_RATE 0.01
-#define EPOCHS 10000
+#define EPOCHS 10
 
 typedef struct {
     int num_layers;
@@ -57,8 +57,10 @@ void initialize_rnn(int num_layers, int *layer_sizes) {
     }
 }
 
-void forward_pass(double input) {
-    rnn.outputs[0][0] = input;
+void forward_pass(double *input) {
+    for (int i = 0; i < rnn.layer_sizes[0]; i++) {
+        rnn.outputs[0][i] = input[i];
+    }
 
     for (int l = 0; l < rnn.num_layers - 1; l++) {
         int rows = rnn.layer_sizes[l];
@@ -74,7 +76,7 @@ void forward_pass(double input) {
     }
 }
 
-void train(double *inputs, double *targets, int sequence_length) {
+void train(double **inputs, double *targets, int sequence_length) {
     double **deltas = (double **)malloc(rnn.num_layers * sizeof(double *));
     for (int i = 0; i < rnn.num_layers; i++) {
         deltas[i] = (double *)malloc(rnn.layer_sizes[i] * sizeof(double));
@@ -141,15 +143,23 @@ int main() {
     initialize_rnn(num_layers, layer_sizes);
 
     // Training data
+    int positions[] = {
+        22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+        64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96
+    };
     double displacements[] = {
         -12, 10, 3, 2, 0, 8, 7, 1, -11, -10, 7, -4, 0,
-        8, 11, 5, 12, 3, -2, -8, -11, 8, -1, 0
+        8, 11, 5, 12, 3, -2, -8, -11, 8, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     };
     int num_displacements = sizeof(displacements) / sizeof(displacements[0]);
 
-    // Normalize displacements for training
+    // Normalize positions and displacements for training
+    double **normalized_inputs = (double **)malloc(num_displacements * sizeof(double *));
     double normalized_displacements[num_displacements];
     for (int i = 0; i < num_displacements; i++) {
+        normalized_inputs[i] = (double *)malloc(INPUT_NODES * sizeof(double));
+        normalized_inputs[i][0] = (positions[i] - 22) / 52.0; // Normalized position
+        normalized_inputs[i][1] = (displacements[i] + 26) / 52.0; // Normalized displacement
         normalized_displacements[i] = (displacements[i] + 26) / 52.0;
     }
 
@@ -157,7 +167,7 @@ int main() {
         double total_error = 0.0;
 
         for (int i = 0; i < num_displacements; i++) {
-            forward_pass(normalized_displacements[i]);
+            forward_pass(normalized_inputs[i]);
             int output_layer = rnn.num_layers - 1;
             total_error += fabs(normalized_displacements[i] - rnn.outputs[output_layer][0]);
         }
@@ -166,14 +176,14 @@ int main() {
             printf("Epoch %d, Total Error: %f\n", epoch, total_error);
         }
 
-        train(normalized_displacements, normalized_displacements, num_displacements);
+        train(normalized_inputs, normalized_displacements, num_displacements);
     }
 
     // Validate the model on training data to check learning
     for (int i = 0; i < num_displacements; i++) {
-        forward_pass(normalized_displacements[i]);
+        forward_pass(normalized_inputs[i]);
         int output_layer = rnn.num_layers - 1;
-        printf("True displacement: %f, Predicted displacement: %f\n", displacements[i], rnn.outputs[output_layer][0] * 52.0 - 26);
+        printf("\nPosition: %d, True displacement: %f, Predicted displacement: %f\n", positions[i], displacements[i], rnn.outputs[output_layer][0] * 52.0 - 26);
     }
 
     // Decrypt the full ciphertext
@@ -181,18 +191,22 @@ int main() {
     int ciphertext_len = strlen(ciphertext);
     char decrypted_text[ciphertext_len + 1];
 
-    printf("\nDetailed Decryption Report:\n");
-    printf("Index\tOriginal\tPredicted Shift\tRounded Shift\tDecrypted\n");
-
-    for (int i = 0; i < rnn.layer_sizes[1]; i++) {
-        rnn.outputs[1][i] = 0.0;
-    }
-
-    for (int i = 0; i < ciphertext_len; i++) {
-        double input = (ciphertext[i] - 'A') / 25.0;
+    printf("\nPredicted Displacements:\n");
+    double predicted_displacements[97];
+    for (int i = 0; i < 97; i++) {
+        double input[] = {(i - 22) / 52.0, 0}; // Normalized position with dummy displacement
         forward_pass(input);
         int output_layer = rnn.num_layers - 1;
         double shift = rnn.outputs[output_layer][0] * 52.0 - 26;
+        predicted_displacements[i] = shift;
+        printf("%d: %f\n", i, shift);
+    }
+
+    printf("\nDetailed Decryption Report:\n");
+    printf("Index\tOriginal\tPredicted Shift\tRounded Shift\tDecrypted\n");
+
+    for (int i = 0; i < ciphertext_len; i++) {
+        double shift = predicted_displacements[i];
         int rounded_shift = (int)round(shift);
         char decrypted_char = 'A' + (ciphertext[i] - 'A' + rounded_shift + 26) % 26;
         decrypted_text[i] = decrypted_char;
@@ -202,6 +216,10 @@ int main() {
 
     printf("\nDecrypted Text: %s\n", decrypted_text);
 
+    for (int i = 0; i < num_displacements; i++) {
+        free(normalized_inputs[i]);
+    }
+    free(normalized_inputs);
     free_rnn();
     return 0;
 }
