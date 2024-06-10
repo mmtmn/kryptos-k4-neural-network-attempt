@@ -18,6 +18,13 @@ You can find the old attempts in one of the folders, where the clues are placed 
 
 The new neural network (unbiased_NN.c) is still training and it is not known if it'll get the clues's plain text in the right place as of right now.
 
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
 # older versions of the Neural Networks
 
 On the older versions of the results are biased. You can find them in the folder biased_NN_&_RNN. The plain text response only includes letters present in the clues, suggesting a biased approach towards the bruteforced attempt. Further work would be required to **potentially** bruteforce the 30+ year old cipher.
