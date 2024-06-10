@@ -11,9 +11,9 @@ The fourth message remains one of the most famous unsolved codes in the world.
 <br>
 <br>
 
-# Latest NN: unbiased_NN.c 
+# Latest NN: unbiased_RNN.c 
 
-gcc -o unbiased_NN unbiased_NN.c -lm;./unbiased_NN
+gcc -o unbiased_RNN unbiased_RNN.c -lm;./unbiased_RNN
 
 <br>
 <br>
