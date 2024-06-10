@@ -4,20 +4,20 @@
 #include <time.h>
 #include <string.h>
 
-#define INPUT_NODES 54 // 26 for one-hot encoding of character + 26 for position encoding + 2 for shifts
-#define HIDDEN_NODES 100 // the best LLMs have billions of hidden nodes
-#define OUTPUT_NODES 26
-#define LEARNING_RATE 0.01
-#define EPOCHS 10000000
+#define INPUT_NODES 54
+#define HIDDEN_NODES 10
+#define OUTPUT_NODES 1
+#define LEARNING_RATE 0.001
+#define EPOCHS 100
 
 typedef struct {
-    double weights[INPUT_NODES][HIDDEN_NODES];
-    double biases[HIDDEN_NODES];
+    double **weights;
+    double *biases;
 } HiddenLayer;
 
 typedef struct {
-    double weights[HIDDEN_NODES][OUTPUT_NODES];
-    double biases[OUTPUT_NODES];
+    double **weights;
+    double *biases;
 } OutputLayer;
 
 HiddenLayer hidden_layer;
@@ -33,6 +33,21 @@ double sigmoid_derivative(double x) {
 
 void initialize_network() {
     srand(time(NULL));
+
+    hidden_layer.weights = (double **)malloc(INPUT_NODES * sizeof(double *));
+    for (int i = 0; i < INPUT_NODES; i++) {
+        hidden_layer.weights[i] = (double *)malloc(HIDDEN_NODES * sizeof(double));
+    }
+
+    hidden_layer.biases = (double *)malloc(HIDDEN_NODES * sizeof(double));
+
+    output_layer.weights = (double **)malloc(HIDDEN_NODES * sizeof(double *));
+    for (int i = 0; i < HIDDEN_NODES; i++) {
+        output_layer.weights[i] = (double *)malloc(OUTPUT_NODES * sizeof(double));
+    }
+
+    output_layer.biases = (double *)malloc(OUTPUT_NODES * sizeof(double));
+
     for (int i = 0; i < INPUT_NODES; i++) {
         for (int j = 0; j < HIDDEN_NODES; j++) {
             hidden_layer.weights[i][j] = ((double)rand() / RAND_MAX) - 0.5;
@@ -51,7 +66,7 @@ void initialize_network() {
     }
 }
 
-void forward_pass(double input[], double hidden_output[], double output[]) {
+void forward_pass(double input[], double hidden_output[], double *output) {
     for (int i = 0; i < HIDDEN_NODES; i++) {
         hidden_output[i] = hidden_layer.biases[i];
         for (int j = 0; j < INPUT_NODES; j++) {
@@ -59,45 +74,32 @@ void forward_pass(double input[], double hidden_output[], double output[]) {
         }
         hidden_output[i] = sigmoid(hidden_output[i]);
     }
-    for (int i = 0; i < OUTPUT_NODES; i++) {
-        output[i] = output_layer.biases[i];
-        for (int j = 0; j < HIDDEN_NODES; j++) {
-            output[i] += hidden_output[j] * output_layer.weights[j][i];
-        }
-        output[i] = sigmoid(output[i]);
+    *output = output_layer.biases[0];
+    for (int i = 0; i < HIDDEN_NODES; i++) {
+        *output += hidden_output[i] * output_layer.weights[i][0];
     }
+    *output = sigmoid(*output) * 52 - 26;
 }
 
-void train(double input[], double target[], double *total_error) {
+void train(double input[], double target, double *total_error) {
     double hidden_output[HIDDEN_NODES];
-    double output[OUTPUT_NODES];
-    forward_pass(input, hidden_output, output);
+    double output;
+    forward_pass(input, hidden_output, &output);
 
-    double output_error[OUTPUT_NODES];
+    double output_error = (target - output) * sigmoid_derivative((output + 26) / 52.0);
+
     double hidden_error[HIDDEN_NODES];
 
-    for (int i = 0; i < OUTPUT_NODES; i++) {
-        output_error[i] = (target[i] - output[i]) * sigmoid_derivative(output[i]);
-        *total_error += fabs(target[i] - output[i]);
-    }
-
     for (int i = 0; i < HIDDEN_NODES; i++) {
-        hidden_error[i] = 0.0;
-        for (int j = 0; j < OUTPUT_NODES; j++) {
-            hidden_error[i] += output_error[j] * output_layer.weights[i][j];
-        }
+        hidden_error[i] = output_error * output_layer.weights[i][0];
         hidden_error[i] *= sigmoid_derivative(hidden_output[i]);
     }
 
     for (int i = 0; i < HIDDEN_NODES; i++) {
-        for (int j = 0; j < OUTPUT_NODES; j++) {
-            output_layer.weights[i][j] += LEARNING_RATE * output_error[j] * hidden_output[i];
-        }
+        output_layer.weights[i][0] += LEARNING_RATE * output_error * hidden_output[i];
     }
 
-    for (int i = 0; i < OUTPUT_NODES; i++) {
-        output_layer.biases[i] += LEARNING_RATE * output_error[i];
-    }
+    output_layer.biases[0] += LEARNING_RATE * output_error;
 
     for (int i = 0; i < INPUT_NODES; i++) {
         for (int j = 0; j < HIDDEN_NODES; j++) {
@@ -108,90 +110,98 @@ void train(double input[], double target[], double *total_error) {
     for (int i = 0; i < HIDDEN_NODES; i++) {
         hidden_layer.biases[i] += LEARNING_RATE * hidden_error[i];
     }
+
+    *total_error += fabs(target - output);
 }
 
-void encode_char_with_position_and_shifts(char c, int position, int pos_shift, int neg_shift, double *output) {
-    for (int i = 0; i < 54; i++) {
+void encode_number_with_position_and_displacements(int num, int position, double displacement, double *output) {
+    for (int i = 0; i < INPUT_NODES; i++) {
         output[i] = 0.0;
     }
-    output[c - 'A'] = 1.0;
-    output[26 + position % 26] = 1.0;
-    output[52] = pos_shift / 26.0; // Normalize the shift values
-    output[53] = neg_shift / 26.0; // Normalize the shift values
+    if (num >= 0 && num < 26) {
+        output[num] = 1.0;
+    }
+    if (position >= 0 && position < 26) {
+        output[26 + position % 26] = 1.0;
+    }
+    output[52] = displacement / 26.0;
 }
 
-void encode_char(char c, double *output) {
-    for (int i = 0; i < 26; i++) {
-        output[i] = 0.0;
+void free_network() {
+    for (int i = 0; i < INPUT_NODES; i++) {
+        free(hidden_layer.weights[i]);
     }
-    output[c - 'A'] = 1.0;
-}
+    free(hidden_layer.weights);
+    free(hidden_layer.biases);
 
-char decode_char(double *input) {
-    int max_index = 0;
-    for (int i = 1; i < 26; i++) {
-        if (input[i] > input[max_index]) {
-            max_index = i;
-        }
+    for (int i = 0; i < HIDDEN_NODES; i++) {
+        free(output_layer.weights[i]);
     }
-    return 'A' + max_index;
+    free(output_layer.weights);
+    free(output_layer.biases);
 }
 
 int main() {
     initialize_network();
 
-    // Training data based on the clues
-    char *ciphertext_clues[] = {"NYPVTT", "MZFPK", "QQPRNGKSS", "FLRV"};
-    char *plaintext_clues[] = {"BERLIN", "CLOCK", "NORTHEAST", "EAST"};
-    int clue_positions[] = {63, 69, 25, 21}; // Starting positions of the clues in the ciphertext
-    int num_clues = 4;
-
-    // Additional training data
-    int additional_positions[] = {64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 26, 27, 28, 29, 30, 31, 32, 33, 34, 22, 23, 24, 25};
-    char additional_ciphertext[] = "NYPVTTMZFPKQQPRNGKSSFLRV";
-    char additional_plaintext[] = "BERLINCLOCKNORTHEASTEAST";
-    int positive_shifts[] = {14, 4, 11, 8, 18, 7, 13, 12, 10, 11, 0, 23, 24, 2, 3, 13, 14, 18, 0, 1, 25, 15, 1, 24};
-    int negative_shifts[] = {-12, -22, -15, -18, -8, -13, -11, -14, -16, -11, -26, -3, -2, -24, -23, -13, -12, -8, -26, -25, -1, -11, -18, -5};
-    int num_additional_clues = 24;
+    int positions_22_25[] = {22, 23, 24, 25};
+    double displacements_22_25[] = {-12, 10, 3, 2};
+    int positions_26_34[] = {26, 27, 28, 29, 30, 31, 32, 33, 34};
+    double displacements_26_34[] = {0, 8, 7, 1, -11, -10, 7, -4, 0};
+    int positions_64_69[] = {64, 65, 66, 67, 68, 69};
+    double displacements_64_69[] = {8, 11, 5, 12, 3, -2};
+    int positions_70_74[] = {70, 71, 72, 73, 74};
+    double displacements_70_74[] = {-8, -11, 8, -1, 0};
 
     for (int epoch = 0; epoch < EPOCHS; epoch++) {
         double total_error = 0.0;
-        for (int clue = 0; clue < num_clues; clue++) {
-            int len = strlen(ciphertext_clues[clue]);
-            for (int i = 0; i < len; i++) {
-                double input[54];
-                double target[26];
-                encode_char_with_position_and_shifts(ciphertext_clues[clue][i], clue_positions[clue] + i, 0, 0, input);
-                encode_char(plaintext_clues[clue][i], target);
-                train(input, target, &total_error);
-            }
-        }
-        for (int i = 0; i < num_additional_clues; i++) {
-            double input[54];
-            double target[26];
-            encode_char_with_position_and_shifts(additional_ciphertext[i], additional_positions[i], positive_shifts[i], negative_shifts[i], input);
-            encode_char(additional_plaintext[i], target);
+
+        for (int i = 0; i < 4; i++) {
+            double input[INPUT_NODES];
+            encode_number_with_position_and_displacements(i, positions_22_25[i], displacements_22_25[i], input);
+            double target = displacements_22_25[i];
             train(input, target, &total_error);
         }
-        if (epoch % 1 == 0) {
-            printf("Epoch %d, Total Error: %f\n", epoch, total_error);
+
+        for (int i = 0; i < 9; i++) {
+            double input[INPUT_NODES];
+            encode_number_with_position_and_displacements(i, positions_26_34[i], displacements_26_34[i], input);
+            double target = displacements_26_34[i];
+            train(input, target, &total_error);
         }
+
+        for (int i = 0; i < 6; i++) {
+            double input[INPUT_NODES];
+            encode_number_with_position_and_displacements(i, positions_64_69[i], displacements_64_69[i], input);
+            double target = displacements_64_69[i];
+            train(input, target, &total_error);
+        }
+
+        for (int i = 0; i < 5; i++) {
+            double input[INPUT_NODES];
+            encode_number_with_position_and_displacements(i, positions_70_74[i], displacements_70_74[i], input);
+            double target = displacements_70_74[i];
+            train(input, target, &total_error);
+        }
+
+        printf("Epoch %d, Total Error: %f\n", epoch, total_error);
     }
 
-    // Decrypt the full ciphertext
     char ciphertext[] = "OBKRUOXOGHULBSOLIFBBWFLRVQQPRNGKSSOTWTQSJQSSEKZZWATJKLUDIAWINFBNYPVTTMZFPKWGDKZXTJCDIGKUHUAUEKCAR";
     int ciphertext_len = strlen(ciphertext);
     char decrypted_text[ciphertext_len + 1];
     for (int i = 0; i < ciphertext_len; i++) {
-        double input[54];
+        double input[INPUT_NODES];
         double hidden_output[HIDDEN_NODES];
-        double output[26];
-        encode_char_with_position_and_shifts(ciphertext[i], i, 0, 0, input);
-        forward_pass(input, hidden_output, output);
-        decrypted_text[i] = decode_char(output);
+        double output;
+        encode_number_with_position_and_displacements(i, i, 0, input);
+        forward_pass(input, hidden_output, &output);
+        int shift = (int)round(output);
+        decrypted_text[i] = ((ciphertext[i] - 'A' - shift + 26) % 26) + 'A';
     }
     decrypted_text[ciphertext_len] = '\0';
     printf("Decrypted Text: %s\n", decrypted_text);
 
+    free_network();
     return 0;
 }
