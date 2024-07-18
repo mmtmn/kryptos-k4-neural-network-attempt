@@ -4,13 +4,14 @@
 #include <time.h>
 #include <string.h>
 
-#define INPUT_NODES 54 // 26 for one-hot encoding of character + 26 for position encoding + 2 for shifts
+#define INPUT_NODES 54
 #define HIDDEN_NODES 100
 #define OUTPUT_NODES 26
 #define LEARNING_RATE 0.1
 #define META_LEARNING_RATE 0.01
-#define EPOCHS 100
+#define EPOCHS 10000
 #define META_EPOCHS 10
+#define ADAPTATION_STEPS 5
 
 typedef struct {
     double weights[INPUT_NODES][HIDDEN_NODES];
@@ -59,21 +60,21 @@ void initialize_network() {
     }
 }
 
-void forward_pass(double input[], double prev_hidden_output[], double hidden_output[], double output[]) {
+void forward_pass(double input[], double prev_hidden_output[], double hidden_output[], double output[], HiddenLayer *hidden_layer_ptr, OutputLayer *output_layer_ptr) {
     for (int i = 0; i < HIDDEN_NODES; i++) {
-        hidden_output[i] = hidden_layer.biases[i];
+        hidden_output[i] = hidden_layer_ptr->biases[i];
         for (int j = 0; j < INPUT_NODES; j++) {
-            hidden_output[i] += input[j] * hidden_layer.weights[j][i];
+            hidden_output[i] += input[j] * hidden_layer_ptr->weights[j][i];
         }
         for (int j = 0; j < HIDDEN_NODES; j++) {
-            hidden_output[i] += prev_hidden_output[j] * hidden_layer.recurrent_weights[j][i];
+            hidden_output[i] += prev_hidden_output[j] * hidden_layer_ptr->recurrent_weights[j][i];
         }
         hidden_output[i] = sigmoid(hidden_output[i]);
     }
     for (int i = 0; i < OUTPUT_NODES; i++) {
-        output[i] = output_layer.biases[i];
+        output[i] = output_layer_ptr->biases[i];
         for (int j = 0; j < HIDDEN_NODES; j++) {
-            output[i] += hidden_output[j] * output_layer.weights[j][i];
+            output[i] += hidden_output[j] * output_layer_ptr->weights[j][i];
         }
         output[i] = sigmoid(output[i]);
     }
@@ -81,7 +82,7 @@ void forward_pass(double input[], double prev_hidden_output[], double hidden_out
 
 void train(double input[], double target[], double prev_hidden_output[], double hidden_output[], double *total_error, HiddenLayer *hidden_layer_ptr, OutputLayer *output_layer_ptr) {
     double output[OUTPUT_NODES];
-    forward_pass(input, prev_hidden_output, hidden_output, output);
+    forward_pass(input, prev_hidden_output, hidden_output, output, hidden_layer_ptr, output_layer_ptr);
 
     double output_error[OUTPUT_NODES];
     double hidden_error[HIDDEN_NODES];
@@ -255,7 +256,7 @@ int main() {
         double hidden_output[HIDDEN_NODES];
         double output[26];
         encode_char_with_position_and_shifts(ciphertext[i], i, 0, 0, input);
-        forward_pass(input, prev_hidden_output, hidden_output, output);
+        forward_pass(input, prev_hidden_output, hidden_output, output, &hidden_layer, &output_layer);
         decrypted_text[i] = decode_char(output);
         memcpy(prev_hidden_output, hidden_output, sizeof(hidden_output));
     }
