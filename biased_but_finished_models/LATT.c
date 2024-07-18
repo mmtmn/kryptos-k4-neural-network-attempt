@@ -7,11 +7,12 @@
 #define INPUT_NODES 54
 #define HIDDEN_NODES 100
 #define OUTPUT_NODES 26
-#define LEARNING_RATE 0.1
-#define META_LEARNING_RATE 0.01
+#define LEARNING_RATE 0.01
+#define META_LEARNING_RATE 0.001
 #define EPOCHS 10000
-#define META_EPOCHS 10
+#define META_EPOCHS 100
 #define ADAPTATION_STEPS 5
+#define WINDOW_SIZE 5
 
 typedef struct {
     double weights[INPUT_NODES][HIDDEN_NODES];
@@ -128,7 +129,7 @@ void train(double input[], double target[], double prev_hidden_output[], double 
 }
 
 void encode_char_with_position_and_shifts(char c, int position, int pos_shift, int neg_shift, double *output) {
-    for (int i = 0; i < 54; i++) {
+    for (int i = 0; i < INPUT_NODES; i++) {
         output[i] = 0.0;
     }
     output[c - 'A'] = 1.0;
@@ -242,14 +243,7 @@ void meta_train() {
     }
 }
 
-int main() {
-    initialize_network();
-    meta_train();
-
-    // Decrypt the full ciphertext
-    char ciphertext[] = "OBKRUOXOGHULBSOLIFBBWFLRVQQPRNGKSSOTWTQSJQSSEKZZWATJKLUDIAWINFBNYPVTTMZFPKWGDKZXTJCDIGKUHUAUEKCAR";
-    int ciphertext_len = strlen(ciphertext);
-    char decrypted_text[ciphertext_len + 1];
+void test_time_training(char *ciphertext, int ciphertext_len) {
     double prev_hidden_output[HIDDEN_NODES] = {0};
     for (int i = 0; i < ciphertext_len; i++) {
         double input[54];
@@ -257,11 +251,36 @@ int main() {
         double output[26];
         encode_char_with_position_and_shifts(ciphertext[i], i, 0, 0, input);
         forward_pass(input, prev_hidden_output, hidden_output, output, &hidden_layer, &output_layer);
-        decrypted_text[i] = decode_char(output);
+
+        // Decode the character
+        char predicted_char = decode_char(output);
+        printf("%c", predicted_char);
+
+        // Calculate the confidence score
+        double confidence_score = output[predicted_char - 'A'];
+
+        // If confidence is low, adapt the model
+        if (confidence_score < 0.8) {
+            double target[26] = {0.0};
+            target[predicted_char - 'A'] = 1.0;
+            train(input, target, prev_hidden_output, hidden_output, NULL, &hidden_layer, &output_layer);
+        }
+
         memcpy(prev_hidden_output, hidden_output, sizeof(hidden_output));
     }
-    decrypted_text[ciphertext_len] = '\0';
-    printf("Decrypted Text: %s\n", decrypted_text);
+    printf("\n");
+}
+
+int main() {
+    initialize_network();
+    meta_train();
+
+    // Decrypt the full ciphertext
+    char ciphertext[] = "OBKRUOXOGHULBSOLIFBBWFLRVQQPRNGKSSOTWTQSJQSSEKZZWATJKLUDIAWINFBNYPVTTMZFPKWGDKZXTJCDIGKUHUAUEKCAR";
+    int ciphertext_len = strlen(ciphertext);
+
+    printf("Decrypted Text: ");
+    test_time_training(ciphertext, ciphertext_len);
 
     return 0;
 }
