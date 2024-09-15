@@ -4,6 +4,8 @@ The fourth message remains one of the most famous unsolved codes in the world.
 
 **This respository is dedicated to bruteforcing the fourth passage.**
 
+Interesting off-topic conversation during the attempts of solving it resulted in this phrase: "Maybe the universe is a cipher solver that got out of hand and it is running a genetic algorithm that led to where we are today."
+
 <br>
 <br>
 <br>
